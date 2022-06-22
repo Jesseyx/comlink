@@ -209,15 +209,15 @@ Comlink.transferHandlers.set("EVENT", {
 
 Note that this particular transfer handler won’t create an actual `Event`, but just an object that has the `event.target.id` and `event.target.classList` property. Often, this is enough. If not, the transfer handler can be easily augmented to provide all necessary data.
 
-### `Comlink.releaseProxy`
+### `Comlink.releaseWrap`
 
-Every proxy created by Comlink has the `[releaseProxy]` method.
+Every proxy created by Comlink `wrap` has the `[releaseWrap]` method.
 Calling it will detach the proxy and the exposed object from the message channel, allowing both ends to be garbage collected.
 
 ```js
 const proxy = Comlink.wrap(port);
 // ... use the proxy ...
-proxy[Comlink.releaseProxy]();
+proxy[Comlink.releaseWrap]();
 ```
 
 ### `Comlink.createEndpoint`

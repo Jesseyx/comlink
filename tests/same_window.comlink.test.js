@@ -575,7 +575,7 @@ describe("Comlink in the same realm", function () {
     const thing = Comlink.wrap(this.port1);
     Comlink.expose(SampleClass, this.port2);
     const instance = await new thing();
-    await instance[Comlink.releaseProxy]();
+    await instance[Comlink.releaseWrap]();
     expect(() => instance.method()).to.throw();
   });
 

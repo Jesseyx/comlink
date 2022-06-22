@@ -69,7 +69,7 @@ export const enum MessageType {
   APPLY = "APPLY",
   CONSTRUCT = "CONSTRUCT",
   ENDPOINT = "ENDPOINT",
-  RELEASE = "RELEASE",
+  RELEASE_WRAP = "RELEASE_WRAP",
 }
 
 export interface GetMessage {
@@ -106,7 +106,7 @@ export interface EndpointMessage {
 
 export interface ReleaseMessage {
   id?: MessageID;
-  type: MessageType.RELEASE;
+  type: MessageType.RELEASE_WRAP;
   path: string[];
 }
 

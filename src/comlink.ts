@@ -24,7 +24,7 @@ export type { Endpoint };
 
 export const proxyMarker = Symbol("Comlink.proxy");
 export const createEndpoint = Symbol("Comlink.endpoint");
-export const releaseProxy = Symbol("Comlink.releaseProxy");
+export const releaseWrap = Symbol("Comlink.releaseWrap");
 
 const throwMarker = Symbol("Comlink.thrown");
 
@@ -113,7 +113,7 @@ export type LocalObject<T> = { [P in keyof T]: LocalProperty<T[P]> };
  */
 export interface ProxyMethods {
   [createEndpoint]: () => Promise<MessagePort>;
-  [releaseProxy]: () => void;
+  [releaseWrap]: () => void;
 }
 
 /**
@@ -325,7 +325,7 @@ export function expose(obj: any, ep: Endpoint = self as any) {
             returnValue = transfer(port1, [port1]);
           }
           break;
-        case MessageType.RELEASE:
+        case MessageType.RELEASE_WRAP:
           {
             returnValue = undefined;
           }
@@ -343,7 +343,7 @@ export function expose(obj: any, ep: Endpoint = self as any) {
       .then((returnValue) => {
         const [wireValue, transferables] = toWireValue(returnValue);
         ep.postMessage({ ...wireValue, id }, transferables);
-        if (type === MessageType.RELEASE) {
+        if (type === MessageType.RELEASE_WRAP) {
           // detach and deactive after sending release response above.
           ep.removeEventListener("message", callback as any);
           closeEndPoint(ep);
@@ -382,10 +382,10 @@ function createProxy<T>(
   const proxy = new Proxy(target, {
     get(_target, prop) {
       throwIfProxyReleased(isProxyReleased);
-      if (prop === releaseProxy) {
+      if (prop === releaseWrap) {
         return () => {
           return requestResponseMessage(ep, {
-            type: MessageType.RELEASE,
+            type: MessageType.RELEASE_WRAP,
             path: path.map((p) => p.toString()),
           }).then(() => {
             closeEndPoint(ep);
