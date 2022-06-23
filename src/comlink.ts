@@ -33,7 +33,7 @@ const throwMarker = Symbol("Comlink.thrown");
  * Can also be implemented by classes.
  */
 export interface ProxyMarked {
-  [proxyMarker]: true;
+  [proxyMarker]: string;
 }
 
 /**
@@ -209,20 +209,42 @@ export interface TransferHandler<T, S> {
   deserialize(value: S): T;
 }
 
+interface TransferHandlerPort {
+  proxyId: string;
+  port?: MessagePort;
+}
+const serializeProxiesMap = new Map<string, boolean>();
+const deserializeProxiesMap = new Map<string, Remote<unknown>>();
+
 /**
  * Internal transfer handle to handle objects marked to proxy.
  */
-const proxyTransferHandler: TransferHandler<object, MessagePort> = {
+const proxyTransferHandler: TransferHandler<object, TransferHandlerPort> = {
   canHandle: (val): val is ProxyMarked =>
-    isObject(val) && (val as ProxyMarked)[proxyMarker],
+    isObject(val) && proxyMarker in (val as ProxyMarked),
   serialize(obj) {
+    const proxyId = (obj as ProxyMarked)[proxyMarker];
+    if (serializeProxiesMap.has(proxyId)) {
+      // has serialized with MessageChannel, reuse port so only return proxyId
+      return [{ proxyId }, []];
+    }
+    serializeProxiesMap.set(proxyId, true);
+
     const { port1, port2 } = new MessageChannel();
     expose(obj, port1);
-    return [port2, [port2]];
+    return [{ proxyId, port: port2 }, [port2]];
   },
-  deserialize(port) {
+  deserialize(proxyObj) {
+    const { proxyId } = proxyObj;
+    if (deserializeProxiesMap.has(proxyId)) {
+      // return the same wrapper for reuse
+      return deserializeProxiesMap.get(proxyId)!;
+    }
+    const port = proxyObj.port!;
     port.start();
-    return wrap(port);
+    const wrapper = wrap(port);
+    deserializeProxiesMap.set(proxyId, wrapper);
+    return wrapper;
   },
 };
 
@@ -347,6 +369,12 @@ export function expose(obj: any, ep: Endpoint = self as any) {
           // detach and deactive after sending release response above.
           ep.removeEventListener("message", callback as any);
           closeEndPoint(ep);
+
+          // remove proxy from serializeProxiesMap created in worker, special for MessageType.CONSTRUCT
+          const proxyId = obj[proxyMarker];
+          if (proxyId && serializeProxiesMap.has(proxyId)) {
+            serializeProxiesMap.delete(proxyId);
+          }
         }
       });
   } as any);
@@ -390,6 +418,14 @@ function createProxy<T>(
           }).then(() => {
             closeEndPoint(ep);
             isProxyReleased = true;
+
+            // remove wrapper from deserializeProxiesMap created in worker side
+            for (const [proxyId, wrapper] of deserializeProxiesMap.entries()) {
+              if (wrapper === proxy) {
+                deserializeProxiesMap.delete(proxyId);
+                break;
+              }
+            }
           });
         };
       }
@@ -476,7 +512,7 @@ export function transfer<T>(obj: T, transfers: Transferable[]): T {
 }
 
 export function proxy<T>(obj: T): T & ProxyMarked {
-  return Object.assign(obj, { [proxyMarker]: true }) as any;
+  return Object.assign(obj, { [proxyMarker]: generateUUID() }) as any;
 }
 
 export function windowEndpoint(
