@@ -220,6 +220,31 @@ const proxy = Comlink.wrap(port);
 proxy[Comlink.releaseWrap]();
 ```
 
+### `Comlink.releaseProxy`
+
+When you use `Comlink.proxy(value)`, Comlink will neither copy nor transfer the value, but instead send a port. The remote wrap this port to communicate. Some time you must destroy the wrapper to prevent memory leaks.
+You can call `Comlink.releaseProxy` in any proxy created by Comlink `wrap`, and give the reference created by `Comlink.proxy(value)` to destroy the communication channel.
+
+```js
+async function init() {
+  const EventEmitter = Comlink.wrap(new Worker('worker.js'));
+  const emitter = await new EventEmitter();
+
+  const clickCallback = Comlink.proxy(() => {
+    console.log('click', Date.now());
+  });
+  await emitter.on('click', clickCallback);
+
+  await emitter.emit('click');
+
+  await emitter.off('click', clickCallback);
+
+  await emitter[Comlink.releaseProxy](clickCallback);
+}
+
+init();
+```
+
 ### `Comlink.createEndpoint`
 
 Every proxy created by Comlink has the `[createEndpoint]` method.

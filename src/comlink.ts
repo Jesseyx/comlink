@@ -25,6 +25,7 @@ export type { Endpoint };
 export const proxyMarker = Symbol("Comlink.proxy");
 export const createEndpoint = Symbol("Comlink.endpoint");
 export const releaseWrap = Symbol("Comlink.releaseWrap");
+export const releaseProxy = Symbol("Comlink.releaseProxy");
 
 const throwMarker = Symbol("Comlink.thrown");
 
@@ -352,6 +353,12 @@ export function expose(obj: any, ep: Endpoint = self as any) {
             returnValue = undefined;
           }
           break;
+        case MessageType.RELEASE_PROXY:
+          {
+            // We just release wrapper here use releaseWrap
+            returnValue = argumentList[0][releaseWrap]();
+          }
+          break;
         default:
           return;
       }
@@ -469,6 +476,18 @@ function createProxy<T>(
         return createProxy(ep, path.slice(0, -1));
       }
       const [argumentList, transferables] = processArguments(rawArgumentList);
+      // We just handle release proxy here, give proxyId to worker
+      if (last === releaseProxy) {
+        return requestResponseMessage(
+          ep,
+          {
+            type: MessageType.RELEASE_PROXY,
+            path: path.slice(0, -1).map((p) => p.toString()),
+            argumentList, // send proxyId to remote for find wrapper 
+          },
+          transferables,
+        ).then(fromWireValue);
+      }
       return requestResponseMessage(
         ep,
         {

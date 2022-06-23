@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document</title>
+</head>
+<body>
+<script type="module">
+  import * as Comlink from '../../../dist/esm/comlink.mjs';
+
+  async function init() {
+    const EventEmitter = Comlink.wrap(new Worker('worker.js'));
+    
+    const emitter = await new EventEmitter();
+    console.log('emitter', emitter);
+
+    const clickCallback = Comlink.proxy(() => {
+      console.log('click', Date.now());
+    });
+    console.log('clickCallback', clickCallback);
+    
+    await emitter.on('click', clickCallback);
+
+    window.emitClick = async () => {
+      await emitter.emit('click');
+    };
+
+    window.offClick = async () => {
+      await emitter.off('click', clickCallback);
+    };
+
+    window.releaseProxy = async () => {
+      await emitter[Comlink.releaseProxy](clickCallback);
+    };
+
+    window.releaseWrap = async () => {
+      await emitter[Comlink.releaseWrap]();
+      await EventEmitter[Comlink.releaseWrap]();
+    };
+  }
+
+  init();
+</script>
+</body>
+</html>

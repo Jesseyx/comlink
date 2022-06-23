@@ -70,6 +70,7 @@ export const enum MessageType {
   CONSTRUCT = "CONSTRUCT",
   ENDPOINT = "ENDPOINT",
   RELEASE_WRAP = "RELEASE_WRAP",
+  RELEASE_PROXY = "RELEASE_PROXY",
 }
 
 export interface GetMessage {
@@ -104,10 +105,17 @@ export interface EndpointMessage {
   type: MessageType.ENDPOINT;
 }
 
-export interface ReleaseMessage {
+export interface ReleaseWrapMessage {
   id?: MessageID;
   type: MessageType.RELEASE_WRAP;
   path: string[];
+}
+
+export interface ReleaseProxyMessage {
+  id?: MessageID;
+  type: MessageType.RELEASE_PROXY;
+  path: string[];
+  argumentList: WireValue[];
 }
 
 export type Message =
@@ -116,4 +124,5 @@ export type Message =
   | ApplyMessage
   | ConstructMessage
   | EndpointMessage
-  | ReleaseMessage;
+  | ReleaseWrapMessage
+  | ReleaseProxyMessage;
