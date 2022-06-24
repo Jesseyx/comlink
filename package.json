@@ -1,5 +1,5 @@
 {
-  "name": "comlink",
+  "name": "@jesseyx/comlink",
   "version": "4.3.1",
   "description": "Comlink makes WebWorkers enjoyable",
   "main": "dist/umd/comlink.js",

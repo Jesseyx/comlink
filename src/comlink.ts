@@ -233,6 +233,11 @@ const proxyTransferHandler: TransferHandler<object, TransferHandlerPort> = {
 
     const { port1, port2 } = new MessageChannel();
     expose(obj, port1);
+    if (isElectron()) {
+      // here only transfer the port, postMessage behaves differently from web, nothing happend when port in value
+      // we should fix this behaves in expose
+      return [{ proxyId }, [port2]];
+    }
     return [{ proxyId, port: port2 }, [port2]];
   },
   deserialize(proxyObj) {
@@ -242,6 +247,11 @@ const proxyTransferHandler: TransferHandler<object, TransferHandlerPort> = {
       return deserializeProxiesMap.get(proxyId)!;
     }
     const port = proxyObj.port!;
+    if (isElectron() && !port.addEventListener) {
+      // in electron MessagePortMain is an [EventEmitter][event-emitter].
+      port.addEventListener = (port as any).on;
+      port.removeEventListener = (port as any).off;
+    }
     port.start();
     const wrapper = wrap(port);
     deserializeProxiesMap.set(proxyId, wrapper);
@@ -313,6 +323,14 @@ export function expose(obj: any, ep: Endpoint = self as any) {
       path: [] as string[],
       ...(ev.data as Message),
     };
+    // fix electron ports
+    if (isElectron() && ev.ports?.length) {
+      (ev.data.argumentList || [])
+        .filter((arg: WireValue) => (arg.type === "HANDLER" && arg.name === "proxy"))
+        .forEach((arg: WireValue, index: number) => {
+          (arg.value as TransferHandlerPort).port = ev.ports[index];
+        });
+    }
     const argumentList = (ev.data.argumentList || []).map(fromWireValue);
     let returnValue;
     try {
@@ -391,7 +409,28 @@ export function expose(obj: any, ep: Endpoint = self as any) {
 }
 
 function isMessagePort(endpoint: Endpoint): endpoint is MessagePort {
-  return endpoint.constructor.name === "MessagePort";
+  const { name } = endpoint.constructor;
+  return name === "MessagePort" || name === "MessagePortMain";
+}
+
+// see https://github.com/cheton/is-electron
+function isElectron() {
+  // Renderer process
+  if (typeof window !== "undefined" && typeof window.process === "object" && (window.process as any).type === "renderer") {
+    return true;
+  }
+
+  // Main process
+  if (typeof process !== "undefined" && typeof process.versions === "object" && !!process.versions.electron) {
+    return true;
+  }
+
+  // Detect the user agent when the `nodeIntegration` option is set to false
+  if (typeof navigator === "object" && typeof navigator.userAgent === "string" && navigator.userAgent.indexOf("Electron") >= 0) {
+    return true;
+  }
+
+  return false;
 }
 
 function closeEndPoint(endpoint: Endpoint) {
@@ -446,6 +485,19 @@ function createProxy<T>(
         }).then(fromWireValue);
         return r.then.bind(r);
       }
+
+      // see https://github.com/GoogleChromeLabs/comlink/pull/513
+      // We just pretend that `call()` didn't happen.
+      if (prop === 'call') {
+        type Call = typeof Function.prototype.call;
+        return (_: any, ...args: any[]): Call => (proxy as Function)(...args);
+      }
+      // We just pretend that `apply()` didn't happen.
+      if (prop === 'apply') {
+        type Apply = typeof Function.prototype.apply;
+        return (_: any, args: any[]): Apply => (proxy as Function)(...args);;
+      }
+
       return createProxy(ep, [...path, prop]);
     },
     set(_target, prop, rawValue) {
